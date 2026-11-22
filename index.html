@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Hisaab | Shop Ledger</title>
-  <link rel="stylesheet" href="hisaab.css">
-  <script src="hisaab.js" defer></script>
+  <link rel="stylesheet" href="hisaab.css?v=20261122c">
+  <script src="hisaab.js?v=20261122c" defer></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -32,20 +32,20 @@
 
   <div class="shell">
     <aside class="sidebar" aria-label="Sidebar">
-      <a href="#overview" class="brand"><span class="brand-icon"><svg><use href="#i-book"/></svg></span><span><strong>Hisaab<span>.</span></strong><small>SHOP LEDGER</small></span></a>
+      <a href="#overview" class="brand"><span class="brand-icon"><svg><use href="#i-book"/></svg></span><span><strong>Hisaab<span>.</span></strong><small data-i18n="brandTag">SHOP LEDGER</small></span></a>
       <nav class="nav" aria-label="Main navigation">
-        <p>WORKSPACE</p>
-        <a href="#overview" id="nav-overview" class="nav-item"><svg><use href="#i-grid"/></svg>Overview</a>
-        <a href="#customers" id="nav-customers" class="nav-item"><svg><use href="#i-people"/></svg>Customers</a>
-        <p>TOOLS</p>
-        <button type="button" class="nav-item" data-action="import"><svg><use href="#i-import"/></svg>Import JSON</button>
+        <p data-i18n="navWorkspace">WORKSPACE</p>
+        <a href="#overview" id="nav-overview" class="nav-item"><svg><use href="#i-grid"/></svg><span data-i18n="navOverview">Overview</span></a>
+        <a href="#customers" id="nav-customers" class="nav-item"><svg><use href="#i-people"/></svg><span data-i18n="navCustomers">Customers</span></a>
+        <p data-i18n="navTools">TOOLS</p>
+        <button type="button" class="nav-item" data-action="import"><svg><use href="#i-import"/></svg><span data-i18n="importJson">Import JSON</span></button>
       </nav>
-      <div class="sidebar-footer"><span class="local-dot"></span><div><strong>Stored on this device</strong><small>No account needed</small></div></div>
+      <div class="sidebar-footer"><span class="local-dot"></span><div><strong data-i18n="storedLocal">Stored on this device</strong><small data-i18n="noAccount">No account needed</small></div></div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <p class="breadcrumb"><svg><use href="#i-grid"/></svg><span>Workspace</span><svg class="crumb-arrow"><use href="#i-chevron"/></svg><strong id="location">Overview</strong></p>
+        <p class="breadcrumb"><svg><use href="#i-grid"/></svg><span data-i18n="workspace">Workspace</span><svg class="crumb-arrow"><use href="#i-chevron"/></svg><strong id="location">Overview</strong></p>
         <a href="#overview" class="brand mobile-brand"><span class="brand-icon"><svg><use href="#i-book"/></svg></span><strong>Hisaab<span>.</span></strong></a>
         <div class="top-actions"><button class="icon-button" id="lang" type="button" aria-label="Toggle Hindi labels" title="Toggle Hindi labels">EN</button><button class="icon-button mobile-import" data-action="import" aria-label="Import JSON" title="Import JSON"><svg><use href="#i-import"/></svg></button><button class="icon-button" id="theme" type="button" aria-label="Switch to dark mode" title="Switch to dark mode"><svg><use href="#i-moon"/></svg></button></div>
       </header>
