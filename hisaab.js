@@ -1,5 +1,6 @@
 const STORAGE_KEY = "hisaab.v1";
-const state = { customers: [], route: { view: "overview" }, search: "" };
+const UPI_ID = "shop@upi";
+const state = { customers: [], route: { view: "overview" }, search: "", lang: localStorage.getItem("hisaab.lang") || "en" };
 const els = {};
 
 function money(value) {
@@ -135,6 +136,7 @@ function renderOverview() {
         <p class="intro">Track credit, payments, balances and reminders for every customer.</p>
       </div>
       <button class="button primary" type="button" data-action="add-customer"><svg><use href="#i-plus"/></svg>Add customer</button>
+      <button class="button secondary" type="button" data-action="export-csv"><svg><use href="#i-import"/></svg>Export CSV</button>
     </section>
     <section class="summary">
       <article class="hero">
@@ -148,6 +150,10 @@ function renderOverview() {
         <article class="metric"><span class="metric-icon"><svg><use href="#i-down"/></svg></span><div><p>Payments received</p><span class="amount">${money(t.totalPayment)}</span></div></article>
         <article class="metric"><span class="metric-icon warm"><svg><use href="#i-people"/></svg></span><div><p>Customers</p><span class="amount">${state.customers.length}</span></div></article>
       </div>
+    </section>
+    <section class="panel" id="overdue">
+      <div class="panel-head"><div><h2>Overdue customers</h2><p>Sorted by days since last payment.</p></div></div>
+      ${overdueRows()}
     </section>
     <section class="panel" id="customers">
       <div class="panel-head">
@@ -195,12 +201,30 @@ function escapeHtml(value) {
   return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function overdueRows() {
+  const overdue = state.customers
+    .map(c => {
+      const payments = c.entries.filter(e => e.type === "payment");
+      const lastPayment = payments.length ? payments.reduce((a, b) => new Date(a.date) > new Date(b.date) ? a : b).date : null;
+      const days = lastPayment ? Math.floor((Date.now() - new Date(lastPayment + "T00:00:00")) / 86400000) : (c.entries.length ? 999 : 0);
+      return { c, balance: customerBalance(c), days, lastPayment };
+    })
+    .filter(x => x.balance > 0)
+    .sort((a, b) => b.days - a.days);
+  if (!overdue.length) return `<div class="empty"><h3>No overdue customers</h3></div>`;
+  return overdue.map(x => `<div class="customer-row" data-customer="${x.c.id}" style="cursor:pointer;"><div class="customer-name">${escapeHtml(x.c.name)}</div><span class="phone">${x.lastPayment ? "Last paid " + dateText(x.lastPayment) : "No payments"}</span><span class="customer-balance due">${money(x.balance)} (${x.days}d)</span><span></span></div>`).join("");
+}
+
 function bindOverviewEvents() {
   document.getElementById("search")?.addEventListener("input", e => {
     state.search = e.target.value;
     renderOverview();
   });
-  els.view.querySelectorAll("[data-action='add-customer']").forEach(btn => btn.addEventListener("click", openAddCustomer));
+  els.view.querySelectorAll("[data-action='export-csv']").forEach(btn => btn.addEventListener("click", exportCSV));
+  els.view.querySelectorAll("#overdue .customer-row").forEach(row => row.addEventListener("click", () => {
+    state.route = { view: "customer", id: row.dataset.customer };
+    render();
+  }));
   els.view.querySelectorAll("[data-action='whatsapp']").forEach(btn => btn.addEventListener("click", e => {
     e.stopPropagation();
     sendReminder(btn.dataset.customer);
@@ -263,7 +287,7 @@ function renderCustomer(customer) {
     </section>
     <section class="panel">
       <div class="panel-head"><div><h2>Transactions</h2><p>Newest first.</p></div></div>
-      ${sorted.length ? sorted.map(entryRow).join("") : `
+      ${sorted.length ? sorted.map(e => entryRow(customer, e)).join("") : `
         <div class="empty"><svg class="empty-art"><use href="#i-wallet"/></svg><h3>No transactions yet</h3><p>Add credit or payment to begin.</p></div>
       `}
     </section>
@@ -278,9 +302,22 @@ function renderCustomer(customer) {
   els.view.querySelector("[data-action='whatsapp']")?.addEventListener("click", () => sendReminder(customer.id));
   els.view.querySelector("[data-action='delete-customer']")?.addEventListener("click", () => deleteCustomer(customer.id));
   els.view.querySelectorAll("[data-action='view-image']").forEach(btn => btn.addEventListener("click", () => openImage(btn.dataset.src)));
+  els.view.querySelectorAll("[data-action='edit-entry']").forEach(btn => btn.addEventListener("click", () => {
+    const customer = state.customers.find(c => c.id === btn.dataset.customer);
+    const entry = customer?.entries.find(e => e.id === btn.dataset.entry);
+    if (customer && entry) openEditEntry(customer, entry);
+  }));
+  els.view.querySelectorAll("[data-action='delete-entry']").forEach(btn => btn.addEventListener("click", () => {
+    const customer = state.customers.find(c => c.id === btn.dataset.customer);
+    if (!customer) return;
+    if (!window.confirm("Delete this transaction?")) return;
+    customer.entries = customer.entries.filter(e => e.id !== btn.dataset.entry);
+    save();
+    render();
+  }));
 }
 
-function entryRow(entry) {
+function entryRow(customer, entry) {
   const isCredit = entry.type === "credit";
   return `
     <article class="entry">
@@ -289,6 +326,10 @@ function entryRow(entry) {
         <strong>${isCredit ? "Credit" : "Payment"}</strong>
         <p>${escapeHtml(entry.note || "No note")}</p>
         ${entry.image ? `<button class="attachment" type="button" data-action="view-image" data-src="${entry.image}"><img src="${entry.image}" alt="Payment screenshot"><span>View screenshot</span></button>` : ""}
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <button class="button secondary" style="min-height:30px;padding:4px 8px;font-size:.75rem;" type="button" data-action="edit-entry" data-customer="${customer.id}" data-entry="${entry.id}">Edit</button>
+          <button class="button secondary" style="min-height:30px;padding:4px 8px;font-size:.75rem;" type="button" data-action="delete-entry" data-customer="${customer.id}" data-entry="${entry.id}">Delete</button>
+        </div>
       </div>
       <div class="entry-value">
         <span class="amount ${isCredit ? "due" : "paid"}">${isCredit ? "+" : "-"} ${money(entry.amount)}</span>
@@ -307,11 +348,37 @@ function openEntry(customer, type) {
         <label>Date <input name="date" type="date" required value="${new Date().toISOString().slice(0, 10)}"></label>
       </div>
       <label>Note <input name="note" maxlength="120" placeholder="What was sold / paid"></label>
-      ${type === "payment" ? `<label>Screenshot (optional) <input name="image" type="file" accept="image/*"></label>` : ""}
+      ${type === "payment" ? `<label>Screenshot (optional) <input name="image" id="entry-image" type="file" accept="image/*"></label><div id="ocr-status" class="hint"></div>` : ""}
       <div id="entry-error" class="form-error" role="alert"></div>
       <div class="form-actions"><button class="button secondary" type="button" data-action="close">Cancel</button><button class="button primary" type="submit">Save entry</button></div>
     </form>
   `);
+  const imgInput = document.getElementById("entry-image");
+  if (imgInput) {
+    imgInput.addEventListener("change", async () => {
+      const file = imgInput.files && imgInput.files[0];
+      if (!file) return;
+      const status = document.getElementById("ocr-status");
+      status.textContent = "Reading amount from screenshot...";
+      try {
+        const { amounts } = await detectAmount(file);
+        if (!amounts.length) {
+          status.textContent = "Couldn't read the amount. Please enter it manually.";
+          return;
+        }
+        const amountInput = document.querySelector('#entry-form input[name="amount"]');
+        if (amounts.length === 1) {
+          amountInput.value = amounts[0];
+          status.textContent = `Detected amount: ${amounts[0]}. You can edit it.`;
+        } else {
+          status.innerHTML = "Multiple amounts detected: " + amounts.map(a => `<button type="button" class="button secondary" style="min-height:28px;padding:2px 8px;font-size:.75rem;" data-ocr="${a}">${a}</button>`).join(" ") + " — click to use.";
+          status.querySelectorAll("[data-ocr]").forEach(b => b.addEventListener("click", () => { amountInput.value = b.dataset.ocr; }));
+        }
+      } catch (e) {
+        document.getElementById("ocr-status").textContent = "Couldn't read the amount. Please enter it manually.";
+      }
+    });
+  }
   document.getElementById("entry-form").addEventListener("submit", async e => {
     e.preventDefault();
     const data = new FormData(e.target);
@@ -344,6 +411,36 @@ function openEntry(customer, type) {
   });
 }
 
+function openEditEntry(customer, entry) {
+  openDialog("Edit entry", `
+    <form class="form" id="edit-form">
+      <div class="fields">
+        <label>Amount (Rs.) <input name="amount" type="number" min="0.01" step="0.01" required value="${entry.amount}"></label>
+        <label>Date <input name="date" type="date" required value="${entry.date}"></label>
+      </div>
+      <label>Note <input name="note" maxlength="120" value="${escapeAttr(entry.note)}"></label>
+      <div id="edit-error" class="form-error" role="alert"></div>
+      <div class="form-actions"><button class="button secondary" type="button" data-action="close">Cancel</button><button class="button primary" type="submit">Save</button></div>
+    </form>
+  `);
+  document.getElementById("edit-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const amount = Number(data.get("amount"));
+    const date = String(data.get("date") || "");
+    const note = String(data.get("note") || "").trim();
+    if (!amount || amount <= 0) { document.getElementById("edit-error").textContent = "Enter a valid amount."; return; }
+    if (!date) { document.getElementById("edit-error").textContent = "Choose a date."; return; }
+    entry.amount = amount;
+    entry.date = date;
+    entry.note = note;
+    save();
+    closeDialog();
+    toast("Entry updated");
+    render();
+  });
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -365,7 +462,7 @@ function sendReminder(customerId) {
     toast("No outstanding balance");
     return;
   }
-  const message = `Namaste ${customer.name}, your outstanding balance at our shop is Rs. ${balance.toLocaleString("en-IN")}. Please pay when convenient. Thank you.`;
+  const message = `Namaste ${customer.name}, your outstanding balance at our shop is Rs. ${balance.toLocaleString("en-IN")}. Pay via UPI: upi://pay?pa=${UPI_ID}&pn=Shop&am=${balance}&cu=INR. Thank you.`;
   const url = `https://wa.me/91${customer.phone}?text=${encodeURIComponent(message)}`;
   window.open(url, "_blank", "noopener,noreferrer");
 }
@@ -445,6 +542,24 @@ function openImport() {
   });
 }
 
+function exportCSV() {
+  const rows = [["Customer", "Phone", "Type", "Amount", "Date", "Note", "Balance"]];
+  state.customers.forEach(c => {
+    const bal = customerBalance(c);
+    if (!c.entries.length) rows.push([c.name, c.phone, "", "", "", "", bal]);
+    c.entries.forEach(e => rows.push([c.name, c.phone, e.type, e.amount, e.date, e.note, bal]));
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "hisaab-export.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("CSV exported");
+}
+
 function normalizeEntry(entry) {
   if (!entry || (entry.type !== "credit" && entry.type !== "payment")) return null;
   const amount = Number(entry.amount);
@@ -457,6 +572,46 @@ function normalizeEntry(entry) {
     note: String(entry.note || "").trim(),
     image: typeof entry.image === "string" ? entry.image : ""
   };
+}
+
+function toggleLang() {
+  state.lang = state.lang === "hi" ? "en" : "hi";
+  localStorage.setItem("hisaab.lang", state.lang);
+  updateLangButton();
+  render();
+}
+function updateLangButton() {
+  if (els.lang) els.lang.textContent = state.lang === "hi" ? "HI" : "EN";
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function parseAmounts(text) {
+  const matches = [];
+  const regex = /(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)/gi;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    const num = Number(m[1].replace(/,/g, ""));
+    if (!isNaN(num) && num > 0) matches.push(num);
+  }
+  return [...new Set(matches)];
+}
+
+async function detectAmount(file) {
+  if (!window.Tesseract) {
+    await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
+  }
+  const result = await window.Tesseract.recognize(file, "eng");
+  const text = result?.data?.text || "";
+  return { text, amounts: parseAmounts(text) };
 }
 
 function handleRoute() {
@@ -473,12 +628,12 @@ document.addEventListener("DOMContentLoaded", () => {
   els.dialogTitle = document.getElementById("dialog-title");
   els.dialogBody = document.getElementById("dialog-body");
   els.toast = document.getElementById("toast");
-  els.theme = document.getElementById("theme");
-  els.storageAlert = document.getElementById("storage-alert");
-
+  els.lang = document.getElementById("lang");
   initTheme();
   load();
   els.theme.addEventListener("click", toggleTheme);
+  els.lang.addEventListener("click", toggleLang);
+  updateLangButton();
   els.dialog.addEventListener("click", e => { if (e.target === els.dialog) closeDialog(); });
   document.addEventListener("click", e => {
     const action = e.target.closest("[data-action]")?.dataset.action;
