@@ -629,6 +629,7 @@ document.addEventListener("DOMContentLoaded", () => {
   els.dialogBody = document.getElementById("dialog-body");
   els.toast = document.getElementById("toast");
   els.lang = document.getElementById("lang");
+  els.theme = document.getElementById("theme");
   initTheme();
   load();
   els.theme.addEventListener("click", toggleTheme);
@@ -643,4 +644,3 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("hashchange", handleRoute);
   handleRoute();
 });
-
